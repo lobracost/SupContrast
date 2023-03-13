@@ -51,9 +51,9 @@ def parse_option():
                         help='momentum')
 
     # model dataset
-    parser.add_argument('--model', type=str, default='resnet50')
+    parser.add_argument('--model', type=str, default='resnet18')
     parser.add_argument('--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'path'], help='dataset')
+                        choices=['cifar10', 'cifar100', 'mnist', 'path'], help='dataset')
     parser.add_argument('--mean', type=str, help='mean of dataset in path in form of str tuple')
     parser.add_argument('--std', type=str, help='std of dataset in path in form of str tuple')
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
@@ -136,6 +136,9 @@ def set_loader(opt):
     elif opt.dataset == 'cifar100':
         mean = (0.5071, 0.4867, 0.4408)
         std = (0.2675, 0.2565, 0.2761)
+    elif opt.dataset == 'mnist':
+        mean = (0.1307,)
+        std = (0.3081,)
     elif opt.dataset == 'path':
         mean = eval(opt.mean)
         std = eval(opt.std)
@@ -162,6 +165,10 @@ def set_loader(opt):
         train_dataset = datasets.CIFAR100(root=opt.data_folder,
                                           transform=TwoCropTransform(train_transform),
                                           download=True)
+    elif opt.dataset == 'mnist':
+        train_dataset = datasets.MNIST('./data',
+                                        transform=TwoCropTransform(train_transform),
+                                        download=True, train=True)
     elif opt.dataset == 'path':
         train_dataset = datasets.ImageFolder(root=opt.data_folder,
                                             transform=TwoCropTransform(train_transform))
