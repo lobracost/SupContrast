@@ -15,7 +15,7 @@ from util import TwoCropTransform, AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model
 from networks.resnet_big import SupConResNet
-from losses import SupConLoss
+from losses import SupConLoss, SupConLossOCC
 
 try:
     import apex
@@ -88,8 +88,8 @@ def parse_option():
     # set the path according to the environment
     if opt.data_folder is None:
         opt.data_folder = './datasets/'
-    opt.model_path = './save/SupCon/{}_models'.format(opt.dataset)
-    opt.tb_path = './save/SupCon/{}_tensorboard'.format(opt.dataset)
+    opt.model_path = './save/SupCon/{}_models_2'.format(opt.dataset)
+    opt.tb_path = './save/SupCon/{}_tensorboard_2'.format(opt.dataset)
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
@@ -185,7 +185,7 @@ def set_loader(opt):
 
 def set_model(opt):
     model = SupConResNet(name=opt.model)
-    criterion = SupConLoss(temperature=opt.temp)
+    criterion = SupConLossOCC(temperature=opt.temp)
 
     # enable synchronized Batch Normalization
     if opt.syncBN:
