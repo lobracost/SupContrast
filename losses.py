@@ -164,7 +164,7 @@ class SupConLossOCC(nn.Module):
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
         logits = anchor_dot_contrast - logits_max.detach()
         
-        negative_mask = mask - torch.eye(mask.shape[0])
+        negative_mask = mask - torch.eye(mask.shape[0]).to(device)
         # tile mask
         mask = mask.repeat(anchor_count, contrast_count)
         negative_mask = negative_mask.repeat(anchor_count, contrast_count)
