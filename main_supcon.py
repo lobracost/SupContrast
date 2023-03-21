@@ -15,7 +15,7 @@ from util import TwoCropTransform, AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model
 from networks.resnet_big import SupConResNet
-from losses import SupConLoss, SupConLossOCC
+from losses import SupConLoss, SupConLossOCC, SupConLossDualT
 
 try:
     import apex
@@ -62,11 +62,15 @@ def parse_option():
     # method
     parser.add_argument('--method', type=str, default='SupCon',
                         choices=['SupCon', 'SimCLR'], help='choose method')
-
+    parser.add_argument('--loss', type=str, default='SupConLoss',
+                        help='Type of supervised loss')
+    
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
                         help='temperature for loss function')
-
+    parser.add_argument('--temp_pos_neg_ratio', type=float, default=10,
+                        help='positive vs negative pairs tempterature in case of Dual Temperature loss')
+    
     # other setting
     parser.add_argument('--cosine', action='store_true',
                         help='using cosine annealing')
@@ -185,8 +189,12 @@ def set_loader(opt):
 
 def set_model(opt):
     model = SupConResNet(name=opt.model)
-    criterion = SupConLossOCC(temperature=opt.temp)
-    #criterion = SupConLoss(temperature=opt.temp)
+    if opt.loss == "SupConLossOCC": 
+        criterion = SupConLossOCC(temperature=opt.temp)
+    elif opt.loss == "SupConLossDualT"
+        criterion = SupConLossDualT(opt.temp, opt.temp_pos_neg_ratio)
+    else:
+        criterion = SupConLoss(temperature=opt.temp)
 
     # enable synchronized Batch Normalization
     if opt.syncBN:

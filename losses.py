@@ -198,12 +198,12 @@ class SupConLossOCC(nn.Module):
 
 class SupConLossDualT(nn.Module):
     """Supervised Contrastive Loss incorporating different tau for positive and negative pairs"""
-    def __init__(self, temperature=0.07, contrast_mode='all',
-                 base_temperature=0.07):
+    def __init__(self, temperature_pos=0.07, contrast_mode='all',
+                 pos_neg_ratio=10):
         super(SupConLossDualT, self).__init__()
-        self.temperature = temperature
+        self.temperature_pos = temperature_pos
+        self.temperature_neg = temperature_pos / pos_neg_ratio
         self.contrast_mode = contrast_mode
-        self.base_temperature = base_temperature
 
     def forward(self, features, labels=None, mask=None):
         """Compute loss for model. If both `labels` and `mask` are None,
@@ -252,16 +252,23 @@ class SupConLossDualT(nn.Module):
         else:
             raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
 
+        # tile mask
+        mask = mask.repeat(anchor_count, contrast_count)
+
         # compute logits
+        similarity = torch.matmul(anchor_feature, contrast_feature.T)
         anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature, contrast_feature.T),
-            self.temperature)
+            similarity,
+            self.temperature_neg)
+        
+        # change temperature of positive samples
+        anchor_dot_contrast = anchor_dot_contrast + mask * anchor_dot_contrast * ((self.temperature_neg - self.temperature_pos) / self.temperature_pos)
+        
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
         logits = anchor_dot_contrast - logits_max.detach()
 
-        # tile mask
-        mask = mask.repeat(anchor_count, contrast_count)
+        
         # mask-out self-contrast cases
         logits_mask = torch.scatter(
             torch.ones_like(mask),
@@ -279,7 +286,7 @@ class SupConLossDualT(nn.Module):
         mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
 
         # loss
-        loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
+        loss = - mean_log_prob_pos
         loss = loss.view(anchor_count, batch_size).mean()
 
         return loss
