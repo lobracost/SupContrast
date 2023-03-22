@@ -9,6 +9,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def control_block_gradients(net_block, requires_grad=False):
+    for param in net_block.parameters():
+        param.requires_grad = requires_grad
+    return net_block
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -183,6 +188,42 @@ class SupConResNet(nn.Module):
     def forward(self, x):
         feat = self.encoder(x)
         feat = F.normalize(self.head(feat), dim=1)
+        return feat
+
+
+class SupConMultiHeadResNet(nn.Module):
+    """backbone + projection head"""
+    def __init__(self, num_classes, name='resnet50', head='mlp', feat_dim=128):
+        super(SupConMultiHeadResNet, self).__init__()
+        self.num_classes = num_classes
+        model_fun, dim_in = model_dict[name]
+        self.encoder = model_fun()
+        
+        for c in range(num_classes):
+            if head == 'linear':
+                setattr(self, "head_{}".format(c),
+                    nn.Linear(dim_in, feat_dim))
+            elif head == 'mlp':
+                setattr(self, "head_{}".format(c),
+                    nn.Sequential(
+                        nn.Linear(dim_in, dim_in),
+                        nn.ReLU(inplace=True),
+                        nn.Linear(dim_in, feat_dim)
+                    )
+                )
+            else:
+                raise NotImplementedError(
+                    'head not supported: {}'.format(head))
+
+    def forward(self, x, projection_head):
+        """projection_head: indice of the corresponding projection head"""
+        feat = self.encoder(x)
+        for c in range(self.num_classes):
+            layer = getattr(self, "head_{}".format(c))
+            layer = control_block_gradients(layer, requires_grad=False)
+        head = getattr(self, "head_{}".format(projection_head))
+        head = control_block_gradients(head, requires_grad=True)
+        feat = F.normalize(head(feat), dim=1)
         return feat
 
 
