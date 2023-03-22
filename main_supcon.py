@@ -15,7 +15,7 @@ from util import TwoCropTransform, AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model
 from networks.resnet_big import SupConResNet
-from losses import SupConLoss, SupConLossOCC, SupConLossDualT
+from losses import SupConLoss, SupConLossOCC, SupConLossDualT, SupConLossOCCDualT
 
 try:
     import apex
@@ -192,7 +192,11 @@ def set_model(opt):
     if opt.loss == "SupConLossOCC": 
         criterion = SupConLossOCC(temperature=opt.temp)
     elif opt.loss == "SupConLossDualT":
-        criterion = SupConLossDualT(opt.temp, opt.temp_pos_neg_ratio)
+        criterion = SupConLossDualT(
+            temperature_pos=opt.temp, pos_neg_ratio=opt.temp_pos_neg_ratio)
+    elif opt.loss == "SupConLossOCCDualT":
+        criterion = SupConLossDualT(
+            temperature_pos=opt.temp, pos_neg_ratio=opt.temp_pos_neg_ratio)
     else:
         criterion = SupConLoss(temperature=opt.temp)
 
