@@ -100,8 +100,8 @@ def parse_option():
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'.\
-        format(opt.method, opt.dataset, opt.model, opt.learning_rate,
+    opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'.\
+        format(opt.method, opt.loss, opt.dataset, opt.model, opt.learning_rate,
                opt.weight_decay, opt.batch_size, opt.temp, opt.trial)
 
     if opt.cosine:
@@ -191,7 +191,7 @@ def set_model(opt):
     model = SupConResNet(name=opt.model)
     if opt.loss == "SupConLossOCC": 
         criterion = SupConLossOCC(temperature=opt.temp)
-    elif opt.loss == "SupConLossDualT"
+    elif opt.loss == "SupConLossDualT":
         criterion = SupConLossDualT(opt.temp, opt.temp_pos_neg_ratio)
     else:
         criterion = SupConLoss(temperature=opt.temp)
