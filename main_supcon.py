@@ -195,7 +195,7 @@ def set_model(opt):
         criterion = SupConLossDualT(
             temperature_pos=opt.temp, pos_neg_ratio=opt.temp_pos_neg_ratio)
     elif opt.loss == "SupConLossOCCDualT":
-        criterion = SupConLossDualT(
+        criterion = SupConLossOCCDualT(
             temperature_pos=opt.temp, pos_neg_ratio=opt.temp_pos_neg_ratio)
     else:
         criterion = SupConLoss(temperature=opt.temp)
