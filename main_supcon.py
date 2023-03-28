@@ -68,7 +68,7 @@ def parse_option():
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
                         help='temperature for loss function')
-    parser.add_argument('--temp_pos_neg_ratio', type=float, default=10,
+    parser.add_argument('--temp_pos_neg_ratio', type=float, default=0,
                         help='positive vs negative pairs tempterature in case of Dual Temperature loss')
     
     # other setting
@@ -100,9 +100,9 @@ def parse_option():
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'.\
+    opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_pos_neg_ratio_{}_trial_{}'.\
         format(opt.method, opt.loss, opt.dataset, opt.model, opt.learning_rate,
-               opt.weight_decay, opt.batch_size, opt.temp, opt.trial)
+               opt.weight_decay, opt.batch_size, opt.temp, opt.temp_pos_neg_ratio, opt.trial)
 
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
