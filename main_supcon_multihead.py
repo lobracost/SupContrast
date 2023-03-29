@@ -9,12 +9,13 @@ import math
 import tensorboard_logger as tb_logger
 import torch
 import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
 from torchvision import transforms, datasets
 
 from util import TwoCropTransform, AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate
 from util import set_optimizer, save_model
-from networks.resnet_big import SupConMultiHeadResNet
+from networks.resnet_big import SupConResNet, SupConMultiHeadResNet
 from losses import SupConLoss, SupConLossOCC, SupConLossDualT, SupConLossOCCDualT
 
 try:
@@ -59,17 +60,9 @@ def parse_option():
     parser.add_argument('--data_folder', type=str, default=None, help='path to custom dataset')
     parser.add_argument('--size', type=int, default=32, help='parameter for RandomResizedCrop')
 
-    # method
-    parser.add_argument('--method', type=str, default='SupCon',
-                        choices=['SupCon', 'SimCLR'], help='choose method')
-    parser.add_argument('--loss', type=str, default='SupConLoss',
-                        help='Type of supervised loss')
-    
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
                         help='temperature for loss function')
-    parser.add_argument('--temp_pos_neg_ratio', type=float, default=10,
-                        help='positive vs negative pairs tempterature in case of Dual Temperature loss')
     
     # other setting
     parser.add_argument('--cosine', action='store_true',
@@ -82,7 +75,7 @@ def parse_option():
                         help='id for recording multiple runs')
 
     opt = parser.parse_args()
-    
+
     # check if dataset is path that passed required arguments
     if opt.dataset == 'path':
         assert opt.data_folder is not None \
@@ -92,16 +85,28 @@ def parse_option():
     # set the path according to the environment
     if opt.data_folder is None:
         opt.data_folder = './datasets/'
-    opt.model_path = './save/SupCon/{}_models_{}'.format(opt.dataset, opt.loss)
-    opt.tb_path = './save/SupCon/{}_tensorboard_{}'.format(opt.dataset, opt.loss)
+    opt.model_path = './save/SupConMultiHead/{}_models'.format(opt.dataset)
+    opt.tb_path = './save/SupConMultiHead/{}_tensorboard'.format(opt.dataset)
+
+    opt.method = "SupConMultiHead"
+
+    if opt.dataset == 'cifar10':
+        opt.num_classes = 10
+    elif opt.dataset == 'cifar100':
+        opt.num_classes = 100
+    elif opt.dataset == 'mnist':
+        opt.num_classes = 10
+    else:
+        raise ValueError('dataset not supported: {}'.format(opt.dataset))
+    
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = '{}_{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'.\
-        format(opt.method, opt.loss, opt.dataset, opt.model, opt.learning_rate,
+    opt.model_name = '{}_{}_{}_lr_{}_decay_{}_bsz_{}_temp_{}_trial_{}'.\
+        format(opt.method, opt.dataset, opt.model, opt.learning_rate,
                opt.weight_decay, opt.batch_size, opt.temp, opt.trial)
 
     if opt.cosine:
@@ -128,13 +133,6 @@ def parse_option():
     opt.save_folder = os.path.join(opt.model_path, opt.model_name)
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder)
-
-    if opt.dataset == 'cifar10':
-        opt.num_classes = 10
-    elif opt.dataset == 'cifar100':
-        opt.num_classes = 100
-    elif opt.dataset == 'mnist':
-        opt.num_classes = 10
 
     return opt
 
@@ -196,17 +194,7 @@ def set_loader(opt):
 
 def set_model(opt):
     model = SupConMultiHeadResNet(num_classes=opt.num_classes, name=opt.model)
-    
-    if opt.loss == "SupConLossOCC": 
-        criterion = SupConLossOCC(temperature=opt.temp)
-    elif opt.loss == "SupConLossDualT":
-        criterion = SupConLossDualT(
-            temperature_pos=opt.temp, pos_neg_ratio=opt.temp_pos_neg_ratio)
-    elif opt.loss == "SupConLossOCCDualT":
-        criterion = SupConLossDualT(
-            temperature_pos=opt.temp, pos_neg_ratio=opt.temp_pos_neg_ratio)
-    else:
-        criterion = SupConLoss(temperature=opt.temp)
+    criterion = SupConLoss(temperature=opt.temp)
 
     # enable synchronized Batch Normalization
     if opt.syncBN:
@@ -222,13 +210,13 @@ def set_model(opt):
     return model, criterion
 
 
-def train(train_loader, model, criterion, optimizer, epoch, opt):
+def train(train_loader, model, criterion, optimizers, epoch, opt):
     """one epoch training"""
     model.train()
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
-    losses = AverageMeter()
+    losses_updater = AverageMeter()
 
     end = time.time()
     for idx, (images, labels) in enumerate(train_loader):
@@ -241,38 +229,47 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
         bsz = labels.shape[0]
 
         # warm-up learning rate
-        warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
-        
-        classes = torch.unique(labels)
-        feature_list = []
-        for c in classes:
-            indices = torch.where(labels == c)
-            x = torch.index_select(images, 0, indices) 
-            feature_list.append(model(x, projection_head=c))
-        
-        features = torch.cat(feature_list, dim=0) 
-        features = features[torch.randperm(bsz)]
+        for optimizer in optimizers:
+            warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
 
         # compute loss
-        
+        """
+        features = model(images)
         f1, f2 = torch.split(features, [bsz, bsz], dim=0)
         features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        if opt.method == 'SupCon':
-            loss = criterion(features, labels)
-        elif opt.method == 'SimCLR':
-            loss = criterion(features)
-        else:
-            raise ValueError('contrastive method not supported: {}'.
-                             format(opt.method))
+        loss = criterion(features, labels)
+        """
+        embedding = model.encoder(images)
+        loss_sum = 0
+        current_batch_classes = 0
+        for idx in range(opt.num_classes):
+            head = getattr(model, "head_{}".format(idx))
+            feat = F.normalize(head(embedding), dim=1)
+            f1, f2 = torch.split(feat, [bsz, bsz], dim=0)
+            feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+            
+            binary_labels = (labels==idx).float()
+            if binary_labels.sum() == 0:
+                continue
 
+            current_batch_classes += 1
+            
+            loss = criterion(feat, binary_labels)
+            loss_sum += loss.clone()
+            
+            optimizers[idx].zero_grad()
+            loss.backward(retain_graph = True)
+            optimizers[idx].step()
+
+        optimizers[opt.num_classes].zero_grad()
+        #overall_loss = torch.div(loss_sum, current_batch_classes)
+        overall_loss = loss
+        print(overall_loss)
+        overall_loss.backward()
+        optimizers[opt.num_classes].step()
         # update metric
-        losses.update(loss.item(), bsz)
-
-        # SGD
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
+        losses_updater.update(overall_loss.item(), bsz)
+        
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -282,7 +279,7 @@ def train(train_loader, model, criterion, optimizer, epoch, opt):
             print('Train: [{0}][{1}/{2}]\t'
                   'BT {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'loss {loss.val:.3f} ({loss.avg:.3f})'.format(
+                  'loss {overall_loss.val:.3f} ({overall_loss.avg:.3f})'.format(
                    epoch, idx + 1, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses))
             sys.stdout.flush()
@@ -300,18 +297,22 @@ def main():
     model, criterion = set_model(opt)
 
     # build optimizer
-    optimizer = set_optimizer(opt, model)
+    optimizers = []
+    for idx in range(opt.num_classes):
+        optimizers.append(set_optimizer(opt, getattr(model, "head_{}".format(idx))))
+    optimizers.append(set_optimizer(opt, model.encoder))
 
     # tensorboard
     logger = tb_logger.Logger(logdir=opt.tb_folder, flush_secs=2)
 
     # training routine
     for epoch in range(1, opt.epochs + 1):
-        adjust_learning_rate(opt, optimizer, epoch)
+        for optimizer in optimizers:
+            adjust_learning_rate(opt, optimizer, epoch)
 
         # train for one epoch
         time1 = time.time()
-        loss = train(train_loader, model, criterion, optimizer, epoch, opt)
+        loss = train(train_loader, model, criterion, optimizers, epoch, opt)
         time2 = time.time()
         print('epoch {}, total time {:.2f}'.format(epoch, time2 - time1))
 

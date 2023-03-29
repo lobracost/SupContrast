@@ -218,11 +218,15 @@ class SupConMultiHeadResNet(nn.Module):
     def forward(self, x, projection_head):
         """projection_head: indice of the corresponding projection head"""
         feat = self.encoder(x)
+        """
         for c in range(self.num_classes):
             layer = getattr(self, "head_{}".format(c))
             layer = control_block_gradients(layer, requires_grad=False)
         head = getattr(self, "head_{}".format(projection_head))
         head = control_block_gradients(head, requires_grad=True)
+        feat = F.normalize(head(feat), dim=1)
+        """
+        head = getattr(self, "head_{}".format(projection_head))
         feat = F.normalize(head(feat), dim=1)
         return feat
 
