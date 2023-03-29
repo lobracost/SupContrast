@@ -286,7 +286,7 @@ def train(train_loader, model, criterion, optimizers, epoch, opt):
                    data_time=data_time, loss=overall_loss))
             sys.stdout.flush()
 
-    return losses.avg
+    return losses_updater.avg
 
 
 def main():
