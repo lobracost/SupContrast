@@ -231,6 +231,42 @@ class SupConMultiHeadResNet(nn.Module):
         return feat
 
 
+class SupConMultiHeadResNet2(nn.Module):
+    """backbone + projection head"""
+    def __init__(self, num_classes, name='resnet50', head='mlp', feat_dim=128):
+        super(SupConMultiHeadResNet2, self).__init__()
+        self.num_classes = num_classes
+        model_fun, dim_in = model_dict[name]
+        self.encoder = model_fun()
+        
+        for c in range(num_classes):
+            if head == 'linear':
+                setattr(self, "head_{}".format(c),
+                    nn.Linear(dim_in, feat_dim))
+            elif head == 'mlp':
+                setattr(self, "head_{}".format(c),
+                    nn.Sequential(
+                        nn.Linear(dim_in, dim_in),
+                        nn.ReLU(inplace=True),
+                        nn.Linear(dim_in, feat_dim)
+                    )
+                )
+            else:
+                raise NotImplementedError(
+                    'head not supported: {}'.format(head))
+
+    def forward(self, x):
+        """projection_head: indice of the corresponding projection head"""
+        embedding = self.encoder(x)
+        features = []
+        for c in range(self.num_classes):
+            head = getattr(self, "head_{}".format(c))
+            feat = F.normalize(head(embedding), dim=1)
+            features.append(feat)
+
+        return features
+
+
 class SupCEResNet(nn.Module):
     """encoder + classifier"""
     def __init__(self, name='resnet50', num_classes=10):
