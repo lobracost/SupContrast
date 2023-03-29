@@ -255,16 +255,18 @@ def train(train_loader, model, criterion, optimizers, epoch, opt):
             current_batch_classes += 1
             
             loss = criterion(feat, binary_labels)
-            loss_sum += loss.clone()
             
             optimizers[idx].zero_grad()
             loss.backward(retain_graph = True)
+            
+            loss_sum += loss.clone()
+            
             optimizers[idx].step()
 
-        optimizers[opt.num_classes].zero_grad()
         #overall_loss = torch.div(loss_sum, current_batch_classes)
         overall_loss = loss
         print(overall_loss)
+        optimizers[opt.num_classes].zero_grad()
         overall_loss.backward()
         optimizers[opt.num_classes].step()
         # update metric
@@ -281,7 +283,7 @@ def train(train_loader, model, criterion, optimizers, epoch, opt):
                   'DT {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'loss {overall_loss.val:.3f} ({overall_loss.avg:.3f})'.format(
                    epoch, idx + 1, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
+                   data_time=data_time, loss=overall_loss))
             sys.stdout.flush()
 
     return losses.avg
