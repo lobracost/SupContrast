@@ -12,7 +12,7 @@ from main_ce import set_loader
 from util import AverageMeter
 from util import adjust_learning_rate, warmup_learning_rate, accuracy
 from util import set_optimizer
-from networks.resnet_big import SupConResNet, LinearClassifier
+from networks.resnet_big import SupConResNet, SupConMultiHeadResNet2, LinearClassifier
 
 try:
     import apex
@@ -61,6 +61,10 @@ def parse_option():
     parser.add_argument('--ckpt', type=str, default='',
                         help='path to pre-trained model')
 
+    # method
+    parser.add_argument('--method', type=str, default='SupCon',
+                        choices=['SupCon', 'Multitask'], help='choose method')
+
     opt = parser.parse_args()
 
     # set the path according to the environment
@@ -101,7 +105,10 @@ def parse_option():
 
 
 def set_model(opt):
-    model = SupConResNet(name=opt.model)
+    if opt.method == "SupCon":
+        model = SupConResNet(name=opt.model)
+    else:
+        model = SupConMultiHeadResNet2(num_classes=opt.n_cls, name=opt.model)
     criterion = torch.nn.CrossEntropyLoss()
 
     classifier = LinearClassifier(name=opt.model, num_classes=opt.n_cls)
