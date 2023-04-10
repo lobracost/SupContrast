@@ -367,7 +367,7 @@ class SupConLossDualTtheta(nn.Module):
         # compute negative logits
         pi = torch.acos(torch.zeros(1)).item() * 2
         eps = 1e-8
-        m = (1 / torch.sqrt(self.temperature_neg) - 1) * pi
+        m = (1 / self.temperature_neg ** (1/2) - 1) * pi
         m = m % pi
         theta = torch.acos(torch.clamp(similarity - m, -1 + eps, 1 - eps))
         similarity_neg = torch.cos(theta)
