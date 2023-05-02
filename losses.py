@@ -369,7 +369,7 @@ class SupConLossDualTtheta(nn.Module):
         eps = 1e-8
         m = (1 / self.temperature_neg ** (1/2) - 1) * pi
         m = m % pi
-        theta = torch.acos(torch.clamp(similarity - m, -1 + eps, 1 - eps))
+        theta = torch.acos(torch.clamp(similarity, -1 + eps, 1 - eps))  - m
         similarity_neg = torch.cos(theta)
         anchor_dot_contrast_neg = torch.div(
             similarity_neg,
