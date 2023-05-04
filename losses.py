@@ -75,11 +75,6 @@ class SupConLoss(nn.Module):
         logits = anchor_dot_contrast - logits_max.detach()
 
         # tile mask
-
-        print("---------------------------")
-        print(anchor_count, contrast_count)
-        print(features.shape)
-        exit()
         mask = mask.repeat(anchor_count, contrast_count)
         
         # mask-out self-contrast cases
