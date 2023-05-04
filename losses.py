@@ -75,6 +75,10 @@ class SupConLoss(nn.Module):
         logits = anchor_dot_contrast - logits_max.detach()
 
         # tile mask
+
+        print("---------------------------")
+        print(anchor_count, contrast_count)
+        exit()
         mask = mask.repeat(anchor_count, contrast_count)
         
         # mask-out self-contrast cases
@@ -464,8 +468,6 @@ class SupConLossOCCDualT(nn.Module):
 
         negative_mask = mask - torch.eye(mask.shape[0]).to(device)
         # tile mask
-        print("---------------------------")
-        print(anchor_count, contrast_count)
         mask = mask.repeat(anchor_count, contrast_count)
         negative_mask = negative_mask.repeat(anchor_count, contrast_count)
 
