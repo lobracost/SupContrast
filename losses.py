@@ -464,6 +464,8 @@ class SupConLossOCCDualT(nn.Module):
 
         negative_mask = mask - torch.eye(mask.shape[0]).to(device)
         # tile mask
+        print("---------------------------")
+        print(anchor_count, contrast_count)
         mask = mask.repeat(anchor_count, contrast_count)
         negative_mask = negative_mask.repeat(anchor_count, contrast_count)
 
