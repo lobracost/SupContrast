@@ -78,6 +78,7 @@ class SupConLoss(nn.Module):
 
         print("---------------------------")
         print(anchor_count, contrast_count)
+        print(features.shape)
         exit()
         mask = mask.repeat(anchor_count, contrast_count)
         
